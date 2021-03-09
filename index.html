@@ -1,0 +1,51 @@
+<html>
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet"> 
+
+        <link rel="stylesheet" type="text/css" href="/css/page.css">
+        <link rel="stylesheet" type="text/css" href="/css/nav.css">
+
+        <script>0</script>
+    </head>
+    <body>
+        <nav>
+            <div class="user-dropdown">
+                <img src="https://a.eusv.ml/2" style="background-color: #424242;">
+                <div id="dropdown-content" class="user-dropdown-content">
+                    <div class="text-content">
+                        <a class="text-component" href="/?p=50&u=2&m=0">My Profile</a>
+                        <a class="text-component" style="top:6px;">Friends</a>
+                        <a class="text-component" style="top:12px;">Settings</a>
+                        <a class="text-component" style="top:18px;">Sign out</a>
+                    </div>
+                </div>
+                <div class="dropdown-nubin" id="nub" onclick="erDrop()">
+                    <img id="flip-chev" src="/chevron.svg">
+                </div>
+            </div>
+        </nav>
+
+        <script>
+            let usermenu = true;
+            function erDrop() {
+                const wa = document.getElementById("nub");
+                const we = document.getElementById("flip-chev");
+                const wr = document.getElementById("dropdown-content");
+                if (usermenu) {
+                    wa.className = "dropdown-nubin dropdown-nubin-expanded";
+                    wa.style = "top: 151px;";
+                    we.className = "spin-up";
+                    wr.className = "user-dropdown-content user-dropdown-expanded";
+                    wr.style = "top: 75px;";
+                } else {
+                    wa.className = "dropdown-nubin";
+                    wa.style = "top: 75px;";
+                    we.className = "spin-down";
+                    wr.className = "user-dropdown-content";
+                    wr.style = "top: -1px;";
+                }
+                usermenu = !usermenu;
+            }
+        </script>
+    </body>
+</html>

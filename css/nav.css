@@ -1,0 +1,158 @@
+nav {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    height: 75px;
+
+    background-color: #323232;
+    z-index: 100;
+}
+
+nav .user-dropdown {
+    position: absolute;
+    top: 0px;
+    right: 12px;
+    width: 75px;
+    height: 75px;
+
+    background-color: #424242;
+}
+
+nav .user-dropdown img {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 69px;
+    height: 69px;
+    border-radius: 6px;
+    z-index: 101;
+}
+
+nav .user-dropdown .dropdown-nubin {
+    position: relative;
+    width: 75px;
+    height: 12px;
+    border-radius: 0px 0px 6px 6px;
+    top: 75px;
+    transition: ease-in-out 0.1s;
+
+    background-color: #424242;
+
+    z-index: 102;
+}
+
+nav .user-dropdown .dropdown-nubin img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 9px;
+    transform: translate(-50%, -50%);
+    filter: invert(1);
+}
+
+.spin-up {
+    position: absolute;
+    animation: spin-up 0.2s ease-in-out;
+    animation-fill-mode: forwards;
+    transition: ease-in-out 0.3s;
+    transform: translate(-50%, -50%);
+    top: 20%!important;
+}
+
+.spin-down {
+    position: absolute;
+    animation: spin-down 0.2s ease-in-out;
+    animation-fill-mode: forwards;
+    transition: ease-in-out 0.3s;
+    transform: translate(-50%, -50%);
+    top: 20%!important;
+    left: 50%;
+}
+
+.spin-default {
+    position: absolute;
+    animation: spin 0.2s ease-in-out;
+    animation-fill-mode: forwards;
+    transition: ease-in-out 0.3s;
+    transform: translate(-50%, -50%);
+    top: 20%!important;
+    left: 50%;
+}
+
+@keyframes spin-up {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(180deg);
+    }
+}
+
+@keyframes spin-down {
+    0% {
+        transform: rotate(180deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+nav .user-dropdown-content {
+    position: fixed;
+    top: -1px;
+    width: 75px;
+    max-height: 0px;
+    background-color: #424242;
+    z-index: -1;
+    min-height: 0px;
+    transition: ease-in-out 0.1s;
+}
+
+nav .user-dropdown-expanded {
+    position: absolute;
+    max-height: 76px;
+    min-height: 76px;
+}
+
+nav .user-dropdown-content .text-content {
+    width: 69px;
+    height: 70px;
+    margin: 3px;
+}
+
+nav .user-dropdown-content .text-content .text-component {
+    position: relative;
+    width: 69px;
+    height: 13px;
+    color: white;
+    font-size: 12px;
+    line-height: 14px;
+    text-align: center;
+    align-items: center;
+    display: block;
+}
+
+nav .user-dropdown:not(.dropdown-nubin-expanded):hover .dropdown-nubin {
+    height: 18px;
+}
+
+nav .dropdown-nubin-expanded {
+    height: 18px!important;
+}
+
+nav .user-dropdown .dropdown-content {
+    width: 75px;
+    height: 76px;
+    background-color: #424242;
+}
