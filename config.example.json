@@ -1,0 +1,12 @@
+{
+    "port": 5002,
+    "profilepicture_url": "http://example.com/",
+
+    "database": {
+        "databaseAddress": "127.0.0.1",
+        "databasePort": 3306,
+        "databaseUsername": "username",
+        "databasePassword": "password",
+        "databaseName": "osu!"
+    }
+}
