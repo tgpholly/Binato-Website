@@ -8,12 +8,16 @@ module.exports.page = async function(pid, req, res) {
     let pageUser, genericVariable, genericVariable1, genericVariable2, genericVariable3, friends, userRank, gameMode, webPrefs;
 
     if (req.user != null) {
-        if (req.user.password_change_required == 1 && pid != 106) {
-            res.redirect(303, "/?p=106");
+        if ((req.user.password_change_required == 1 && req.user.has_old_password == 0) && pid != 107) {
+            res.redirect(303, "/?p=107");
+            return null;
+        }
+        if (req.user.has_old_password == 1 && pid != 107) {
+            res.redirect(303, "/?p=107");
             return null;
         }
     } else {
-        if (pid == 105 || pid == 106) {
+        if (pid == 105 || pid == 106 || pid == 107) {
             res.redirect(303, "/?=0");
             return null;
         }
@@ -286,6 +290,21 @@ module.exports.page = async function(pid, req, res) {
                     </form>
 
                     <a class="noaccount" href="/?p=105">I don't want to do this, take me back!</a>
+                </div>          
+            `;
+
+        case 107:
+            return `
+                <div class="loginbox" style="height:260px;">
+                    <h2>Required Password Change</h2>
+                    <hr>
+
+                    <form class="formpositioner" action="/change_password" method="post">
+                        <input class="logintext" type="password" name="ha" placeholder="Password"><br>
+                        <input class="logintext" type="password" name="cha" placeholder="Confirm Password"><br>
+                        <br>
+                        <input class="formsubmitbutton" type="submit" value="Change Password">
+                    </form>
                 </div>          
             `;
 

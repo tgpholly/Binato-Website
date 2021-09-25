@@ -29,6 +29,8 @@ app.get("*", async (req, res) => {
 
         const generatedContent = await printer.page(req.query.p, req, res);
 
+        if (generatedContent == null) return;
+
         const preExistingTitle = generatedContent.includes("<title>");
 
         // Headers
