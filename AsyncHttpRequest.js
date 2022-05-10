@@ -1,10 +1,16 @@
-const request = require("request");
+const fetch = require("node-fetch");
 
-module.exports = async function(url) {
-    return new Promise((resolve, reject) => {
-        request(url, (err, res, body) => {
-            if (err) reject(err);
-            else resolve(body);
-        });
-    });
+const functionMap = {
+	"text": async (res) => await res.text(),
+	"json": async (res) => await res.json()
+};
+
+module.exports = async function(url, reqType = "text") {
+	return new Promise(async (resolve, reject) => {
+		try {
+			resolve(functionMap[reqType](await fetch(url)));
+		} catch (e) {
+			reject(e);
+		}
+	});
 }
