@@ -12,13 +12,17 @@ module.exports.page = async function(pid, req, res) {
 			res.redirect(303, "/?p=107");
 			return null;
 		}
-		if (req.user.has_old_password == 1 && pid != 107) {
+		if (req.user.has_old_password >= 1 && pid != 107) {
 			res.redirect(303, "/?p=107");
 			return null;
 		}
+		if (pid >= 900 && req.user.id != 2) {
+			res.redirect(303, "/");
+			return null;
+		}
 	} else {
-		if (pid == 105 || pid == 106 || pid == 107) {
-			res.redirect(303, "/?=0");
+		if (pid == 105 || pid == 106 || pid == 107 || pid >= 900) {
+			res.redirect(303, "/");
 			return null;
 		}
 	}
@@ -27,72 +31,100 @@ module.exports.page = async function(pid, req, res) {
 		case 0:
 			genericVariable = await global.Database.query(`SELECT HomepageText from web_info LIMIT 1`);
 			return `
-				<div class="homeText">
+				<div style="text-align:center">
 					${genericVariable["HomepageText"]}
 				</div>
 			`;
 
 		case 1:
-			if (req.query.t == null || req.query.t == 0) genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY pp_raw DESC LIMIT 50", [req.query.m == null ? 0 : req.query.m]);
-			else genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY ranked_score DESC LIMIT 50", [req.query.m == null ? 0 : req.query.m]);
-
-			genericVariable1 = "";
-
-			for (let i = 0; i < genericVariable.length; i++) {
-				// Don't show users who have 0 score
-				if (genericVariable[i].ranked_score > 0) {
-					genericVariable2 = await global.Database.query(`SELECT username, country FROM users_info WHERE id = ? LIMIT 1`, [genericVariable[i].user_id]);
-
-					if (req.user != null) friends = await global.Database.query(`SELECT * FROM friends WHERE user = ?`, [req.user.id]);
-
-					genericVariable3 = flagConversion[genericVariable2.country];
-
-					if (friends != null) {
-						let isFriendsWithViewer = false;
-						for (let row of friends) {
-							if (row.friendsWith == genericVariable[i].user_id) {
-								if (row.user == req.user.id) {
-									isFriendsWithViewer = true;
-									break;
-								}
-							}
-						}
-
-						genericVariable1 += `
-							<tr class="${req.user.id == genericVariable[i].user_id ? "you" : ""}${isFriendsWithViewer ? "friend" : ""}">
-								<td>#${i + 1}</td>
-								<td><a href="/?p=50&u=${genericVariable[i].user_id}&m=0">${genericVariable2.username}</a><h>S</h>${genericVariable3 == null ? "" : genericVariable3}</td>
-								<td>${addCommas(genericVariable[i].ranked_score)}</td>
-								<td>${addCommas(genericVariable[i].pp_raw)}</td>
-							</tr>
-						`;
-					} else {
-						genericVariable1 += `
-							<tr>
-								<td>#${i + 1}</td>
-								<td><a href="/?p=50&u=${genericVariable[i].user_id}&m=0">${genericVariable2.username}</a><h>S</h>${genericVariable3 == null ? "" : genericVariable3}</td>
-								<td>${addCommas(genericVariable[i].ranked_score)}</td>
-								<td>${addCommas(genericVariable[i].pp_raw)}</td>
-							</tr>
-						`;
-					}
-				}
+			pageNumber = parseInt(req.query.page);
+			pageIsNaN = isNaN(pageNumber);
+			if (pageIsNaN) {
+				pageNumber = 0;
 			}
 
-			return `
-				<table>
+			dbPage = pageNumber * 50;
+			pageCount = calculatePageCount((await global.Database.query("SELECT COUNT(id) FROM users_info"))[0]["COUNT(id)"], 50);
+
+			if (req.query.t == null || req.query.t == 0) genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY pp_raw DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
+			else genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY ranked_score DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
+
+			genericVariable1 = "";
+			leaderboardPageCount = 1;
+
+			parsedModeId = parseInt(req.query.m);
+			modeIsNaN = isNaN(parsedModeId);
+			if (modeIsNaN) {
+				parsedModeId = 0;
+			}
+
+			for (let i = 0; i < genericVariable.length; i++) {
+				genericVariable2 = await global.Database.query(`SELECT username, country FROM users_info WHERE id = ? LIMIT 1`, [genericVariable[i].user_id]);
+
+				genericVariable3 = flagConversion[genericVariable2.country];
+				genericVariable1 += `
 					<tr>
-						<th>Rank</th>
-						<th>Player</th>
-						<th>Ranked Score</th>
-						<th>PP</th>
+						<th>${i + 1}</td>
+						<td><a class="text-info" href="/?p=50&u=${genericVariable[i].user_id}&m=${parsedModeId}">${genericVariable2.username}</a> ${genericVariable3 == null ? "" : genericVariable3}</td>
+						<td>${addCommas(genericVariable[i].ranked_score)}</td>
+						<td>${addCommas(genericVariable[i].pp_raw)}</td>
 					</tr>
-					${genericVariable1}
+				`;
+			}
+
+			parsedScoringType = parseInt(req.query.t);
+			scoringTypeNaN = isNaN(parsedScoringType);
+			if (scoringTypeNaN) {
+				parsedScoringType = 0
+			}
+
+			firstPage = pageNumber == 0;
+			lastPage = (pageNumber + 1) == pageCount;
+
+			return `
+				<div class="container p-0">
+					<div class="row">
+						<div class="col">
+							<div class="btn-group" role="group" aria-label="Mode Selection">
+								<a class="btn btn-primary${(parsedModeId === 0) ? " active" : ""}" href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}&m=0">osu!</a>
+								<a class="btn btn-primary${(parsedModeId === 1) ? " active" : ""}" href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}&m=1">osu!taiko</a>
+								<a class="btn btn-primary${(parsedModeId === 3) ? " active" : ""}" href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}&m=3">osu!mania</a>
+								<a class="btn btn-primary${(parsedModeId === 2) ? " active" : ""}" href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}&m=2">osu!catch</a>
+							</div>
+						</div>
+						<div class="col">
+							<div class="btn-group mb-3" role="group" aria-label="Ranking Type Selection">
+								<a class="btn btn-primary${(parsedScoringType === 0) ? " active" : ""}" href="/?p=1${modeIsNaN ? "" : "&m=" + parsedModeId}">PP</a>
+								<a class="btn btn-primary${(parsedScoringType === 1) ? " active" : ""}" href="/?p=1&t=1${modeIsNaN ? "" : "&m=" + parsedModeId}">Score</a>
+							</div>
+						</div>
+						<div class="col">
+							<div class="btn-group mb-3" role="group" aria-label="Ranking Type Selection">
+								<a class="btn btn-primary${firstPage ? " disabled" : ""}"${firstPage ? "" : `href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}${modeIsNaN ? "" : "&m=" + parsedModeId}&page=${pageNumber - 1}"`}>&lt;</a>
+								<a class="btn btn-primary no-click">${pageNumber + 1}/${pageCount}</a>
+								<a class="btn btn-primary${lastPage ? " disabled" : ""}"${lastPage ? "" : `href="/?p=1${(scoringTypeNaN ? "" : "&t=" + parsedScoringType)}${modeIsNaN ? "" : "&m=" + parsedModeId}&page=${pageNumber + 1}"`}>&gt;</a>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<table class="table table-dark table-striped text-light mb-3" style="margin-bottom:0">
+					<thead>
+						<tr>
+							<th>#</th>
+							<th>Player</th>
+							<th>Ranked Score</th>
+							<th>PP</th>
+						</tr>
+					</thead>
+					<tbody>
+						${genericVariable1}
+					</tbody>
 				</table>
 			`;
 
 		case 5:
-			// Currently unused page, server switcher hasn't been made and is pretty redundant. See: -devserver flag
+			// Currently unused page, server switcher hasn't been made and is pretty redundant. See: -devserver arg
 			return `
 				<p>Server Switcher:</p>
 				<p>Windows: <a href="/Switcher.exe">Switcher.exe</a></p>
@@ -106,7 +138,7 @@ module.exports.page = async function(pid, req, res) {
 			try {
 				if (req.query.u != null) {
 					genericVariable = parseInt(req.query.u);
-					if (genericVariable.toString() == "NaN") {
+					if (isNaN(genericVariable)) {
 						// Get user from database using a username instead
 						pageUser = await global.Database.query("SELECT * FROM users_info WHERE username = ? LIMIT 1", [req.query.u]);
 						// Make sure this user exsts
@@ -143,45 +175,48 @@ module.exports.page = async function(pid, req, res) {
 
 					return `
 						<title>${pageUser.username} - Binato</title>
-						<div class="userpage">
-							<div class="userbox">
-								<img src="${config.profilepicture_url}${pageUser.id}">
-								<h2>${pageUser.username}<h>S</h>${pageUser["playerFlag"] == null ? "" : pageUser["playerFlag"]}</h2>
-								<h4>${pageUser.online_now == 1 ? "Online" : "Offline"}</h4>
-								<h1>${userRank}</h1>
+						<div class="container">
+							<div class="row">
+								<div class="col">
+									<img src="${config.profilepicture_url}${pageUser.id}" style="border-radius:.5rem;max-height:10rem">
+								</div>
+								<div class="col align-self-center">
+									<h2 style="margin-top:1rem;">${pageUser.username}<h>S</h>${pageUser["playerFlag"] == null ? "" : pageUser["playerFlag"]}</h2>
+									<h4>${pageUser.online_now == 1 ? "Online" : "Offline"}</h4>
+								</div>
+								<div class="col align-self-center">
+									<h1 style="text-align:center">${userRank}</h1>
+								</div>
 							</div>
-							<div class="userinfo">
-								<div class="leftside">
+						</div>
+						<hr>
+						<div class="container">
+							<div class="row">
+								<div class="col">
 									<p>Joined: <b>${processRegDate(pageUser.reg_date)}</b></p>
 									<p>Last Seen: <b>${pageUser.online_now == 1 ? "Now" : processRegDate(pageUser.last_login_date)}</b></p>
 									<p>Plays With: <b>${stringFromInputPrefs(webPrefs)}</b></p>
 									<p>Location: <b>${webPrefs.location}</b></p>
 									<p>Interests: <b>${webPrefs.interests}</b></p>
 								</div>
-								<div class="rightside">
-									<div class="infocontainer">
-										<p class="left">Ranked Score</p>
-										<p class="right"><b>${addCommas(genericVariable == null ? 0 : genericVariable.ranked_score)}</b></p>
-									</div>
-									<div class="infocontainer">
-										<p class="left">Hit Accuracy</p>
-										<p class="right"><b>${genericVariable == null ? 0 : genericVariable.avg_accuracy.toFixed(2)}%</b></p>
-									</div>
-									<div class="infocontainer">
-										<p class="left">Play Count</p>
-										<p class="right"><b>${addCommas(genericVariable == null ? 0 : genericVariable.playcount)}</b></p>
-									</div>
-									<div class="infocontainer">
-										<p class="left">Total Score</p>
-										<p class="right"><b>${addCommas(genericVariable == null ? 0 : genericVariable.total_score)}</b></p>
-									</div>
-									<div class="infocontainer">
-										<p class="left">Maximum Combo</p>
-										<p class="right"><b>${addCommas(genericVariable1 == null ? 0 : genericVariable1.max_combo)}</b></p>
-									</div>
-									<div class="infocontainer">
-										<p class="left">PP</p>
-										<p class="right"><b>${addCommas(genericVariable == null ? 0 : genericVariable.pp_raw)}</b></p>
+								<div class="col">
+									<div class="row">
+										<div class="col">
+											<p>Ranked Score</p>
+											<p>Hit Accuracy</p>
+											<p>Play Count</p>
+											<p>Total Score</p>
+											<p>Maximum Combo</p>
+											<p>PP</p>
+										</div>
+										<div class="col">
+											<p><b>${addCommas(genericVariable == null ? 0 : genericVariable.ranked_score)}</b></p>
+											<p><b>${genericVariable == null ? 0 : genericVariable.avg_accuracy.toFixed(2)}%</b></p>
+											<p><b>${addCommas(genericVariable == null ? 0 : genericVariable.playcount)}</b></p>
+											<p><b>${addCommas(genericVariable == null ? 0 : genericVariable.total_score)}</b></p>
+											<p><b>${addCommas(genericVariable1 == null ? 0 : genericVariable1.max_combo)}</b></p>
+											<p><b>${addCommas(genericVariable == null ? 0 : genericVariable.pp_raw)}</b></p>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -189,45 +224,84 @@ module.exports.page = async function(pid, req, res) {
 					`;
 				} else throw "User not found";
 			} catch (e) {
-				return `There was an error loading the userpage for this user. This has been logged.`;
+				if (e == "User not found") {
+					return "No user by this ID exists";
+				}
 			}
 
 		// User stuff
 
 		case 100:
 			return `
-				<div class="loginbox" style="height:290px;">
-					<h2>Login</h2>
-					<hr>
+				<h2>Login</h2>
+				<hr>
 
-					<form class="formpositioner" action="/login" method="post">
-						<input class="logintext" type="text" name="u" placeholder="Username"><br>
-						<input class="logintext" type="password" name="ha" placeholder="Password"><br>
-						<br>
-						<input class="formsubmitbutton" type="submit" value="Login">
-					</form>
+				<form action="/login" method="post">
+					<div class="container">
+						<div class="row">
+							<div class="col col-sm-3"></div>
+							<div class="col">
+								<div class="mb-2">
+									<label for="usernameBox" class="form-label">Username</label>
+									<input type="text" name="u" class="form-control" id="usernameBox" maxlength="15" placeholder="Username">
+								</div>
+								<div class="mb-2">
+									<label for="passwordBox" class="form-label">Password</label>
+									<input type="password" name="ha" class="form-control" id="passwordBox" maxlength="100" placeholder="Password">
+								</div>
+								<br>
+								<div class="text-center">
+									<input type="submit" class="btn btn-primary" value="Login">
+								</div>
+							</div>
+							<div class="col col-sm-3"></div>
+						</div>
+					</div>
+				</form>
 
-					<a class="noaccount" href="/?p=101">Don't have an account? Click here!</a>
-				</div>
+				<hr>
+				<center>
+					<a href="/?p=101">Don't have an account? Click here!</a>
+				</center>
 			`;
 
 		case 101:
 			return `
-				<div class="loginbox" style="height:376px;">
-					<h2>Register</h2>
-					<hr>
+				<h2>Register</h2>
+				<hr>
 
-					<form class="formpositioner" action="/register" method="post">
-						<input class="logintext" type="text" name="u" placeholder="Username"><br>
-						<input class="logintext" type="text" name="em" placeholder="Email"><br>
-						<input class="logintext" type="password" name="ha" placeholder="Password"><br>
-						<input class="logintext" type="password" name="cha" placeholder="Confirm Password"><br>
-						<br>
-						<input class="formsubmitbutton" type="submit" value="Register">
-					</form>
+				<form action="/register" method="post">
+					<div class="container">
+						<div class="row">
+							<div class="col col-sm-3"></div>
+							<div class="col">
+								<div class="mb-2">
+									<label for="usernameBox" class="form-label">Username</label>
+									<input class="form-control" type="text" name="u" id="usernameBox" maxlength="15" placeholder="Username">
+								</div>
+								<div class="mb-2">
+									<label for="emailBox" class="form-label">Email</label>
+									<input class="form-control" type="email" name="em" id="emailBox" maxlength="100" placeholder="Email"><br>
+								</div>
+								<div class="mb-2">
+									<label for="passwordBox" class="form-label">Password</label>
+									<input class="form-control mb-2" type="password" name="ha" id="passwordBox" maxlength="100" placeholder="Password">
+									<input class="form-control" type="password" name="cha" placeholder="Confirm Password">
+								</div>
+								<br>
+								<div class="text-center">
+									<input type="submit" class="btn btn-primary" value="Register">
+								</div>
+							</div>
+							<div class="col col-sm-3"></div>
+						</div>
+					</div>					
+				</form>
 
-					<a class="noaccount" href="/?p=100">Already have an account? Click here!</a>
-				</div>
+				<hr>
+				<center>
+					<a href="/?p=100">Already have an account? Click here!</a>
+				</center>
 			`;
 
 		// Verification
@@ -240,52 +314,84 @@ module.exports.page = async function(pid, req, res) {
 			webPrefs = await global.Database.query(`SELECT * FROM web_prefs WHERE id = ? LIMIT 1`, [req.user.id]);
 
 			return `
-				<div class="settingspage">
-					<div class="userbox" style="height:510px">
-						<div class="insetcontainer">
-							<p><b>Account Management</b></p>
-							<form action="/" method="get">
-								<input style="display:none;" type="text" name="p" value="106"></input>
-								<input class="button" type="submit" value="Change Password">
-							</form>
+				<div class="container">
+					<div class="row bottom-border">
+						<div class="col-4 p-3 bg-dark">
+							<b>Account Management</b>
 						</div>
-						<div class="insetcontainer" style="top:124px">
+						<div class="col p-3">
+							<div class="row text-center">
+								<div class="col">
+									<a class="btn btn-primary" href="/?p=106">Change Password</a>
+								</div>
+								<div class="col">
+									<a class="btn btn-primary" href="javascript:alert('2FA is not currently implemented')">Setup 2FA</a>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="row bottom-border">
+						<div class="col-4 p-3 bg-dark">
+							<b>Avatar</b>
+						</div>
+						<div class="col p-3">
+							<div class="row text-center">
+								<div class="col">
+									<img src="${config.profilepicture_url}${req.user.id}" style="height:10rem;border-radius:4px">
+								</div>
+								<div class="col">
+									<a class="btn btn-primary" href="/?p=108">Change Profile Picture</a>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="row bottom-border">
+						<div class="col-4 p-3 bg-dark">
+							<b>Input Methods</b>
+						</div>
+						<div class="col p-3">
 							<form action="/update_settings" method="post">
-								<p><b>Input Methods</b></p>
-								<div class="checkboxcontainer">
-									<p class="left">Keyboard</p>
-									<input class="right" name="keyboard" type="checkbox"${webPrefs.keyboard == 1 ? " checked" : ""}>
+								<div class="row">
+									<div class="col">
+										<input class="form-check-input" name="keyboard" id="keyboardCheckbox" type="checkbox"${webPrefs.keyboard == 1 ? " checked" : ""}>
+										<label for="keyboardCheckbox">Keyboard</label>
+									</div>
+									<div class="col">
+										<input class="form-check-input" name="mouse" id="mouseCheckbox" type="checkbox"${webPrefs.mouse == 1 ? " checked" : ""}>
+										<label for="mouseCheckbox">Mouse</label>
+									</div>
 								</div>
-								<div class="checkboxcontainer">
-									<p class="left">Mouse</p>
-									<input class="right" name="mouse" type="checkbox"${webPrefs.mouse == 1 ? " checked" : ""}>
+								<div class="row pt-3">
+									<div class="col">
+										<input class="form-check-input" name="tablet" id="tabletCheckbox" type="checkbox"${webPrefs.tablet == 1 ? " checked" : ""}>
+										<label for="tabletCheckbox">Tablet</label>
+									</div>
+									<div class="col">
+										<input class="form-check-input" class="right" id="touchCheckbox" name="touch" type="checkbox"${webPrefs.touch == 1 ? "checked" : ""}>
+										<label for="touchCheckbox">Touch</label>
+									</div>
 								</div>
-								<div class="checkboxcontainer">
-									<p class="left">Tablet</p>
-									<input class="right" name="tablet" type="checkbox"${webPrefs.tablet == 1 ? " checked" : ""}>
-								</div>
-								<div class="checkboxcontainer">
-									<p class="left">Touch</p>
-									<input class="right" name="touch" type="checkbox"${webPrefs.touch == 1 ? "checked" : ""}>
-								</div>
-								<br>
-								<input class="button" type="submit" value="Save Changes">
+
+								<input class="mt-3 btn btn-primary" type="submit" value="Save Changes">
 							</form>
 						</div>
-						<div class="insetcontainer" style="top:324px">
-							<p><b>Profile Info</b></p>
+					</div>
+					<div class="row">
+						<div class="col-4 p-3 bg-dark">
+							<b>Profile Info</b>
+						</div>
+						<div class="col p-3">
 							<form action="/profile_info" method="post">
-								<div class="checkboxcontainer">
-									<p class="left">Location</p>
-									<input class="right" style="width:150px" type="text" name="location" value="${webPrefs.location.split("\"").join("&quot;").split("<").join("&lt;").split(">").join("&gt;")}"></input>
+								<div class="col">
+									<label class="pb-1">Location</label>
+									<input class="form-control" type="text" name="location" maxlength="32" value="${webPrefs.location.split("\"").join("&quot;").split("<").join("&lt;").split(">").join("&gt;")}"></input>
 								</div>
-								<hr style="margin:2px;visibility:hidden">
-								<div class="checkboxcontainer">
-									<p class="left">Interests</p>
-									<input class="right" style="width:150px" type="text" name="interests" value="${webPrefs.interests.split("\"").join("&quot;").split("<").join("&lt;").split(">").join("&gt;")}"></input>
+								<div class="col">
+									<label class="pb-1 pt-1">Interests</label>
+									<input class="form-control" type="text" name="interests" maxlength="64" value="${webPrefs.interests.split("\"").join("&quot;").split("<").join("&lt;").split(">").join("&gt;")}"></input>
 								</div>
-								<br>
-								<input class="button" type="submit" value="Save Changes">
+
+								<input class="mt-3 btn btn-primary" type="submit" value="Save Changes">
 							</form>
 						</div>
 					</div>
@@ -293,41 +399,198 @@ module.exports.page = async function(pid, req, res) {
 			`;
 
 		case 106:
-			return `
-				<div class="loginbox" style="height:290px;">
-					<h2>Change Password</h2>
-					<hr>
-
-					<form class="formpositioner" action="/change_password" method="post">
-						<input class="logintext" type="password" name="ha" placeholder="Password"><br>
-						<input class="logintext" type="password" name="cha" placeholder="Confirm Password"><br>
-						<br>
-						<input class="formsubmitbutton" type="submit" value="Change Password">
-					</form>
-
-					<a class="noaccount" href="/?p=105">I don't want to do this, take me back!</a>
-				</div>          
-			`;
-
 		case 107:
 			return `
-				<div class="loginbox" style="height:260px;">
-					<h2>Required Password Change</h2>
-					<hr>
+				<h2>${pid == 107 ? "Required Password Change" : "Change Password"}</h2>
+				<hr>
 
-					<form class="formpositioner" action="/change_password" method="post">
-						<input class="logintext" type="password" name="ha" placeholder="Password"><br>
-						<input class="logintext" type="password" name="cha" placeholder="Confirm Password"><br>
-						<br>
-						<input class="formsubmitbutton" type="submit" value="Change Password">
-					</form>
-				</div>          
+				<form action="/change_password" method="post">
+					<div class="container">
+						<div class="row">
+							<div class="col col-sm-3"></div>
+							<div class="col">
+								<div class="mb-2">
+									<input type="password" name="ha" class="form-control" maxlength="100" placeholder="Password">
+								</div>
+								<div class="mb-2">
+									<input type="password" name="cha" class="form-control" maxlength="100" placeholder="Confirm Password">
+								</div>
+								<br>
+								<div class="text-center">
+									<input type="submit" class="btn btn-primary" value="Change Password">
+								</div>
+							</div>
+							<div class="col col-sm-3"></div>
+						</div>
+					</div>
+				</form>
+
+				${pid == 107 ? "" : `<hr>
+				<center>
+					<a href="/?p=105">I don't want to do this, take me back!</a>
+				</center>`}
 			`;
 
-		case 199:
+		case 108:
+			return `
+				<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js" integrity="sha512-ooSWpxJsiXe6t4+PPjCgYmVfr1NS5QXJACcR/FPpsdm6kqG1FmQ2SVyg2RXeVuCRBLr0lWHnWJP6Zs1Efvxzww==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+				<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" integrity="sha512-0SPWAwpC/17yYyZ/4HSllgaK7/gg9OlVozq8K7rf3J8LvCjYEEIfzzpnA2/SSjpGIunCSD18r3UhvDcu/xncWA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+				<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cropper/1.0.1/jquery-cropper.min.js" integrity="sha512-V8cSoC5qfk40d43a+VhrTEPf8G9dfWlEJgvLSiq2T2BmgGRmZzB8dGe7XAABQrWj3sEfrR5xjYICTY4eJr76QQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+				<div>
+					<input style="margin-bottom:1rem!important" type="file" class="form-control" id="imagePicker" accept="image/*" />
+					
+					<div id="fpContainer" style="margin-bottom:1rem!important">
+						<center id="centerlol">
+							<img id="image" src="${config.profilepicture_url}${req.user.id}" style="max-width:100%">
+						</center>
+					</div>
+
+					<center><button class="btn btn-primary" id="submitButton" disabled>Upload</button></center>
+				</div>
+
+				<script>
+					let cropper;
+
+					const filePicker = document.getElementById("imagePicker");
+					const submitButton = document.getElementById("submitButton");
+
+					filePicker.addEventListener("change", e => {
+						const reader = new FileReader();
+						reader.addEventListener("loadend", () => {
+							//console.log(reader.result);
+
+							try {
+								document.getElementsByClassName("cropper-container")[0].remove();
+							} catch (e) {}
+							try {
+								document.getElementById("centerlol").remove();
+							} catch (e) {}
+							try {
+								document.getElementById("image").remove();
+							} catch (e) {}
+
+							const woahDiv = document.createElement("div");
+							woahDiv.innerHTML = \`<img id="image" style="max-width:100%" src="\${reader.result\}">\`
+							document.getElementById("fpContainer").appendChild(woahDiv);
+
+							launchCropper();
+						});
+						reader.readAsDataURL(filePicker.files[0]); 
+					});
+
+					submitButton.addEventListener("click", (e) => {
+						submitButton.disabled = false;
+						const imageDataURL = cropper.getCroppedCanvas({width:256,height:256}).toDataURL("image/jpeg", 0.8);i
+						const imageBin = atob(imageDataURL.split(",")[1]);
+						const array = [];
+						for (let i = 0; i < imageBin.length; i++) {
+							array.push(imageBin.charCodeAt(i));
+						}
+
+						const file = new Blob([new Uint8Array(array)], {type: "image/png"});
+
+						const formdata = new FormData();
+						formdata.append("pfp.png", file);
+
+						const xhr = new XMLHttpRequest();
+						xhr.open("POST", "https://eusv.ml/upload", true);
+						xhr.onload = () => {
+							console.log(xhr.responseText);
+						};
+
+						xhr.send(formdata);
+					});
+
+					function launchCropper() {
+						var $image = $('#image');
+
+						$image.cropper({
+							aspectRatio: 1/1,
+							viewMode: 1,
+							dragMode: "none",
+							zoomOnTouch: false,
+							zoomOnWheel: false,
+							zoomable: false,
+							crop: function(event) {
+								//console.log(event.detail);
+							}
+						});
+						
+						// Get the Cropper.js instance after initialized
+						cropper = $image.data('cropper');
+
+						submitButton.disabled = false;
+					}
+				</script>
+			`;
+
+		// Admin panel 900 - 999
+		case 900:
 			return `
 				
 			`;
+
+		// 910 - 919 User management
+		case 910:
+			pageNumber = parseInt(req.query.page);
+			pageIsNaN = isNaN(pageNumber);
+			if (pageIsNaN) {
+				pageNumber = 0;
+			}
+
+			dbPage = pageNumber * 50;
+			pageCount = calculatePageCount((await global.Database.query("SELECT COUNT(id) FROM users_info"))[0]["COUNT(id)"], 50);
+
+			genericVariable = await global.Database.query("SELECT id, username, country FROM users_info LIMIT 50 OFFSET ?", [dbPage]);
+
+			genericVariable1 = "";
+			leaderboardPageCount = 1;
+
+			for (let i = 0; i < genericVariable.length; i++) {
+				genericVariable1 += `
+					<tr>
+						<th>${genericVariable[i].id}</td>
+						<td>${genericVariable[i].username}</td>
+						<td>${genericVariable[i].country.toUpperCase()}</td>
+						<td><a class="btn btn-info btn-sm">Edit User</a></td>
+						<td><form action="/delete_user" method="post" onSubmit="return confirm('Are you sure you wish to delete ${genericVariable[i].username}?')"><input style="display:none" name="id" value="${genericVariable[i].id}"><input type="submit" class="btn btn-danger btn-sm" value="Delete User"></form></td>
+					</tr>
+				`;
+			}
+
+			parsedModeId = parseInt(req.query.m);
+			modeIsNaN = isNaN(parsedModeId);
+			if (modeIsNaN) {
+				parsedModeId = 0;
+			}
+
+			parsedScoringType = parseInt(req.query.t);
+			scoringTypeNaN = isNaN(parsedScoringType);
+			if (scoringTypeNaN) {
+				parsedScoringType = 0
+			}
+
+			firstPage = pageNumber == 0;
+			lastPage = (pageNumber + 1) == pageCount;
+
+			// User listing
+			return `
+				<table class="table table-dark table-striped text-light mb-3" style="margin-bottom:0">
+					<thead>
+						<tr>
+							<th>ID</th>
+							<th>Username</th>
+							<th>Country</th>
+							<th></th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						${genericVariable1}
+					</tbody>
+				</table>
+			`
 
 		default:
 			return `
@@ -339,41 +602,80 @@ module.exports.page = async function(pid, req, res) {
 module.exports.nav = async function(pid, user = null) {
 	pid = pid == null ? 0 : parseInt(pid);
 
-	let navbar = "<nav>";
+	let navbar = `
+<nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
+	<div class="container-fluid">
+		<a class="navbar-brand" href="/?p=900">${pid >= 900 ? "Binato Admin Panel" : "Binato"}</a>
+		<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#theNavbar" aria-controls="theNavbar" aria-expanded="false" aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+		<div class="collapse navbar-collapse" id="theNavbar">
+			<div class="navbar-nav me-auto mb-2 mb-lg-0">`;
 
 	// Left side
-	if (pid == 0) navbar += `<a class="button selected">Home</a>`;
-	else navbar += `<a class="button" href="/?p=0">Home</a>`;
+	if (pid >= 900) {
+		navbar += adminPanelNavbar(pid);
+	} else {
+		navbar += normalNavbar(pid);
+	}
 
-	if (pid == 1) navbar += `<a class="button selected">Leaderboard</a>`;
-	else navbar += `<a class="button" href="/?p=1">Leaderboard</a>`;
-
-	navbar += `<a class="button" href="https://github.com/tgpethan/Binato-Repos/" target="_blank">Open Source</a>`;
-
-	// Right side
-	navbar += `<div class="right">`;
+	navbar += `</div><div class="navbar-nav ml-auto">`;
 
 	if (user != null) {
 		// User button
 		navbar += `
-			<div class="dropdown">
-				<a class="buttonimg"><img height="36" src="${config.profilepicture_url}${user.id}"></a>
-				<div class="dropdownContent">
-					<a href="/?p=50&u=${user.id}&m=0">My Profile</a>
-					<a href="/?p=105">Settings</a>
-					<a href="javascript:l()">Logout</a>
+			<div class="nav-item dropdown">
+				<img class="nav-link dropdown-toggle p-0 pfp-border" style="max-height:2.75rem;border-radius:.5rem" id="profileDropdownButton" data-bs-toggle="dropdown" src="${config.profilepicture_url}${user.id}">
+				<div class="dropdown-menu mt-2 dropdown-menu-end bg-dark" aria-labelledby="profileDropdownButton">
+					<a class="dropdown-item text-light" href="/?p=50&u=${user.id}&m=0">My Profile</a>
+					<a class="dropdown-item text-light" href="/?p=105">Settings</a>${(user.id === 2) ? `<a class="dropdown-item text-light" href="/?p=900">Admin Panel</a>` : ""}
+					<a class="dropdown-item text-light" href="javascript:l()">Logout</a>
 				</div>
 			</div>
 		`;
 	} else {
 		// Login button
-		if (pid == 100) navbar += `<a class="button selected">Login</a>`;
-		else navbar += `<a class="button" href="/?p=100">Login</a>`;
+		if (pid == 100) navbar += `<a class="nav-link active">Login</a>`;
+		else navbar += `<a class="nav-link" href="/?p=100">Login</a>`;
 	}
 
-	navbar += "</div>";
+	navbar += "</div></div></div>";
 
 	navbar += "</nav>";
+
+	return navbar;
+}
+
+function normalNavbar(pid) {
+	let navbar = "<div class=\"nav-item\">";
+
+	if (pid == 0) navbar += `<a class="nav-link active">Home</a>`;
+	else navbar += `<a class="nav-link" href="/?p=0">Home</a>`;
+
+	navbar += `</div><div class="nav-item">`;
+
+	if (pid == 1) navbar += `<a class="nav-link active">Leaderboard</a>`;
+	else navbar += `<a class="nav-link" href="/?p=1">Leaderboard</a>`;
+
+	navbar += `</div>`;
+
+	navbar += `<div class="nav-item"><a class="nav-link" href="https://github.com/tgpethan/Binato-Repos/" target="_blank">Open Source</a></div>`;
+
+	return navbar;
+}
+
+function adminPanelNavbar(pid) {
+	let navbar = "<div class=\"nav-item\">";
+
+	if (pid == 900) navbar += `<a class="nav-link active">Dashboard</a>`;
+	else navbar += `<a class="nav-link" href="/?p=900">Dashboard</a>`;
+
+	navbar += `</div><div class="nav-item">`;
+
+	if (pid == 910) navbar += `<a class="nav-link active">User Management</a>`;
+	else navbar += `<a class="nav-link" href="/?p=910">User Management</a>`;
+
+	navbar += `</div>`;
 
 	return navbar;
 }
@@ -401,6 +703,15 @@ const monthTable = {
 	Oct: "October",
 	Nov: "November",
 	Dec: "December"
+}
+
+function calculatePageCount(numberOfItems = 0, itemsPerPage = 50) {
+	const int = Math.floor(numberOfItems / itemsPerPage);
+	if (numberOfItems > int) {
+		return int + 1;
+	} else {
+		return int;
+	}
 }
 
 function processRegDate(d) {

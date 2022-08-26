@@ -1,21 +1,46 @@
-const aes256 = require("aes256"),
-	  md5 = require("md5"),
-	  {v4: uuid} = require("uuid"),
-	  config = require("./config.json");
+const md5 = require("md5"),
+	  config = require("./config.json"),
+	  crypto = require("crypto");
 
-module.exports = async function(passwdInfo, req, res) {
-	if (req.user != null) {
-		if (passwdInfo.ha === passwdInfo.cha) {
-			const sessionToken = uuid().split("-").join("") + uuid().split("-").join("");
-			await global.Database.query("UPDATE users_info SET password = ? WHERE id = ?", [aes256.encrypt(config.database.databaseKey, md5(passwdInfo.ha)), req.user.id]);
-			if (req.user.password_change_required == 1) await global.Database.query("UPDATE users_info SET password_change_required = 0 WHERE id = ?", [req.user.id]);
-			if (req.user.has_old_password == 1) await global.Database.query("UPDATE users_info SET has_old_password = 0 WHERE id = ?", [req.user.id]);
-			await global.Database.query("UPDATE users_info SET web_session = ? WHERE id = ?", [sessionToken, req.user.id]);
-			res.cookie("binato_session", sessionToken, {maxAge:2147483647});
-			if (req.user.password_change_required == 1) return `/?p=0`;
-			else return `/?p=105`;
-		} else return `/?p=106&e=0`;
-	} else {
-		return `/?p=0`;
-	}
+module.exports = function(passwdInfo, req, res) {
+	return new Promise((resolve, reject) => {
+		if (req.user != null) {
+			if (passwdInfo.ha.length > 100 || passwdInfo.cha.length > 100) return resolve("/?p=106&e=1");
+
+			if (passwdInfo.ha === passwdInfo.cha) {
+				crypto.randomBytes(32, (err, sessionToken) => {
+					if (err) {
+						console.error(err);
+						return resolve("/?p=106&e=1");
+					}
+					sessionToken = sessionToken.toString("hex");
+
+					crypto.randomBytes(128, (err, passwordSalt) => {
+						if (err) {
+							console.error(err);
+							return resolve("/?p=106&e=1");
+						}
+						passwordSalt = passwordSalt.toString("hex");
+
+						crypto.pbkdf2(md5(passwdInfo.ha), passwordSalt, config.database.pbkdf2.itterations, config.database.pbkdf2.keylength, "sha512", async (err, derivedKey) => {
+							if (err) {
+								console.error(err);
+								return resolve("/?p=106");
+							} else {
+								await global.Database.query(
+									"UPDATE users_info SET password_hash = ?, password_salt = ?, password_change_required = ?, has_old_password = ?, password_reset_key = ?, web_session = ? WHERE id = ?",
+									[derivedKey.toString("hex"), passwordSalt, 0, 0, null, sessionToken, req.user.id]
+								);
+								res.cookie("binato_session", sessionToken, {maxAge:2147483647});
+								if (req.user.password_change_required == 1) return resolve(`/?p=0`);
+								else return resolve(`/?p=105`);
+							}
+						});
+					});
+				});
+			} else return resolve(`/?p=106&e=0`);
+		} else {
+			return resolve(`/?p=0`);
+		}
+	});
 }
