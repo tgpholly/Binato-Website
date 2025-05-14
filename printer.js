@@ -1,10 +1,13 @@
 const config = require("./config.json"),
 	  flagConversion = require("./flagConversion.json");
 
+const bitFlags = require("./bitflags.js");
+const Permissions = require("./enums/Permissions.js");
+
 module.exports.page = async function(pid, req, res) {
 	pid = pid == null ? 0 : parseInt(pid);
 	
-	// Remind me to never do this again. wtf is a genericVariable what was I thinking?
+	// Remind me to never do this again. wtf is a genericVariable?
 	let pageUser, genericVariable, genericVariable1, genericVariable2, genericVariable3, friends, userRank, gameMode, webPrefs;
 
 	if (req.user != null) {
@@ -46,8 +49,8 @@ module.exports.page = async function(pid, req, res) {
 			dbPage = pageNumber * 50;
 			pageCount = calculatePageCount((await global.Database.query("SELECT COUNT(id) FROM users_info"))[0]["COUNT(id)"], 50);
 
-			if (req.query.t == null || req.query.t == 0) genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY pp_raw DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
-			else genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? ORDER BY ranked_score DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
+			if (req.query.t == null || req.query.t == 0) genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? AND is_deleted <> 1 AND ranked_score <> 0 AND pp_raw <> 0 ORDER BY pp_raw DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
+			else genericVariable = await global.Database.query("SELECT user_id, ranked_score, pp_raw FROM users_modes_info WHERE mode_id = ? AND is_deleted <> 1 AND ranked_score <> 0 AND pp_raw <> 0 ORDER BY ranked_score DESC LIMIT 50 OFFSET ?", [req.query.m == null ? 0 : req.query.m, dbPage]);
 
 			genericVariable1 = "";
 			leaderboardPageCount = 1;
@@ -59,7 +62,7 @@ module.exports.page = async function(pid, req, res) {
 			}
 
 			for (let i = 0; i < genericVariable.length; i++) {
-				genericVariable2 = await global.Database.query(`SELECT username, country FROM users_info WHERE id = ? LIMIT 1`, [genericVariable[i].user_id]);
+				genericVariable2 = await global.Database.query(`SELECT username, country FROM users_info WHERE id = ? AND is_deleted <> 1 LIMIT 1`, [genericVariable[i].user_id]);
 
 				genericVariable3 = flagConversion[genericVariable2.country];
 				genericVariable1 += `
@@ -178,7 +181,7 @@ module.exports.page = async function(pid, req, res) {
 						<div class="container">
 							<div class="row">
 								<div class="col">
-									<img src="${config.profilepicture_url}${pageUser.id}" style="border-radius:.5rem;max-height:10rem">
+									<img src="${config.profilepicture_url}${pageUser.id}?${pageUser.web_pfp_cacheid}" style="border-radius:.5rem;max-height:10rem">
 								</div>
 								<div class="col align-self-center">
 									<h2 style="margin-top:1rem;">${pageUser.username}<h>S</h>${pageUser["playerFlag"] == null ? "" : pageUser["playerFlag"]}</h2>
@@ -337,7 +340,7 @@ module.exports.page = async function(pid, req, res) {
 						<div class="col p-3">
 							<div class="row text-center">
 								<div class="col">
-									<img src="${config.profilepicture_url}${req.user.id}" style="height:10rem;border-radius:4px">
+									<img src="${config.profilepicture_url}${req.user.id}?${req.user.web_pfp_cacheid}" style="height:10rem;border-radius:4px">
 								</div>
 								<div class="col">
 									<a class="btn btn-primary" href="/?p=108">Change Profile Picture</a>
@@ -442,87 +445,14 @@ module.exports.page = async function(pid, req, res) {
 					
 					<div id="fpContainer" style="margin-bottom:1rem!important">
 						<center id="centerlol">
-							<img id="image" src="${config.profilepicture_url}${req.user.id}" style="max-width:100%">
+							<img id="image" src="${config.profilepicture_url}${req.user.id}?${req.user.web_pfp_cacheid}" style="max-width:100%">
 						</center>
 					</div>
 
-					<center><button class="btn btn-primary" id="submitButton" disabled>Upload</button></center>
+					<center id="uploadButton" style="display:none"><button class="btn btn-primary" id="submitButton" disabled>Upload</button></center>
 				</div>
 
-				<script>
-					let cropper;
-
-					const filePicker = document.getElementById("imagePicker");
-					const submitButton = document.getElementById("submitButton");
-
-					filePicker.addEventListener("change", e => {
-						const reader = new FileReader();
-						reader.addEventListener("loadend", () => {
-							//console.log(reader.result);
-
-							try {
-								document.getElementsByClassName("cropper-container")[0].remove();
-							} catch (e) {}
-							try {
-								document.getElementById("centerlol").remove();
-							} catch (e) {}
-							try {
-								document.getElementById("image").remove();
-							} catch (e) {}
-
-							const woahDiv = document.createElement("div");
-							woahDiv.innerHTML = \`<img id="image" style="max-width:100%" src="\${reader.result\}">\`
-							document.getElementById("fpContainer").appendChild(woahDiv);
-
-							launchCropper();
-						});
-						reader.readAsDataURL(filePicker.files[0]); 
-					});
-
-					submitButton.addEventListener("click", (e) => {
-						submitButton.disabled = false;
-						const imageDataURL = cropper.getCroppedCanvas({width:256,height:256}).toDataURL("image/jpeg", 0.8);i
-						const imageBin = atob(imageDataURL.split(",")[1]);
-						const array = [];
-						for (let i = 0; i < imageBin.length; i++) {
-							array.push(imageBin.charCodeAt(i));
-						}
-
-						const file = new Blob([new Uint8Array(array)], {type: "image/png"});
-
-						const formdata = new FormData();
-						formdata.append("pfp.png", file);
-
-						const xhr = new XMLHttpRequest();
-						xhr.open("POST", "https://eusv.ml/upload", true);
-						xhr.onload = () => {
-							console.log(xhr.responseText);
-						};
-
-						xhr.send(formdata);
-					});
-
-					function launchCropper() {
-						var $image = $('#image');
-
-						$image.cropper({
-							aspectRatio: 1/1,
-							viewMode: 1,
-							dragMode: "none",
-							zoomOnTouch: false,
-							zoomOnWheel: false,
-							zoomable: false,
-							crop: function(event) {
-								//console.log(event.detail);
-							}
-						});
-						
-						// Get the Cropper.js instance after initialized
-						cropper = $image.data('cropper');
-
-						submitButton.disabled = false;
-					}
-				</script>
+				<script src="/js/pfp.js"></script>
 			`;
 
 		// Admin panel 900 - 999
@@ -547,14 +477,17 @@ module.exports.page = async function(pid, req, res) {
 			genericVariable1 = "";
 			leaderboardPageCount = 1;
 
+			let usernameList = "";
+
 			for (let i = 0; i < genericVariable.length; i++) {
+				usernameList += `"${genericVariable[i].id}":"${genericVariable[i].username}",`;
 				genericVariable1 += `
 					<tr>
+						<form id="deleteForm${genericVariable[i].id}" action="/delete_user" method="post"><input style="display:none" name="id" value="${genericVariable[i].id}"></form>
 						<th>${genericVariable[i].id}</td>
 						<td>${genericVariable[i].username}</td>
 						<td>${genericVariable[i].country.toUpperCase()}</td>
-						<td><a class="btn btn-info btn-sm">Edit User</a></td>
-						<td><form action="/delete_user" method="post" onSubmit="return confirm('Are you sure you wish to delete ${genericVariable[i].username}?')"><input style="display:none" name="id" value="${genericVariable[i].id}"><input type="submit" class="btn btn-danger btn-sm" value="Delete User"></form></td>
+						<td><button onclick="doDelete('${genericVariable[i].id}')" class="btn btn-danger btn-sm ms-2 float-end"><i class="bi bi-trash"></i></button><a class="btn btn-warning btn-sm ms-2 float-end"><i class="bi bi-arrow-clockwise"></i></a><a class="btn btn-info btn-sm ms-2 float-end" href="/?p=911&u=${genericVariable[i].id}"><i class="bi bi-pencil-square"></i></a></td>
 					</tr>
 				`;
 			}
@@ -583,14 +516,99 @@ module.exports.page = async function(pid, req, res) {
 							<th>Username</th>
 							<th>Country</th>
 							<th></th>
-							<th></th>
 						</tr>
 					</thead>
 					<tbody>
 						${genericVariable1}
 					</tbody>
 				</table>
-			`
+				
+				<script>
+					let users = {${usernameList}};
+					function doDelete(which) {
+						if (!confirm('Are you sure you wish to delete ' + users[which] + '?')) {
+							return;
+						}
+
+						const delForm = document.getElementById("deleteForm"+which);
+						delForm.submit();
+					}
+				</script>
+			`;
+
+		case 911:
+			userId = parseInt(req.query.u);
+			if (isNaN(userId))
+				return "User Editor | ID must be given";
+
+			dbData = await global.Database.query("SELECT * FROM users_info WHERE id = ? LIMIT 1", [userId]);
+			if (dbData == null) {
+				return "User Editor | ID does not correspond to a User";
+			} else {
+				flags = bitFlags(dbData.tags, Permissions);
+
+				return `
+					${req.query.alert != null ? `
+						<div class="alert alert-info" role="alert" id="pagealert">
+							${Buffer.from(req.query.alert, "base64url").toString("utf-8")}
+						</div>
+					` : ""}
+					<h2>Editing ${dbData.username}</h2>
+					<hr>
+					<form method="post" action="/save_user">
+						<input type="hidden" name="id" value="${dbData.id}">
+						<label class="mb-2" for="e">Username</label>
+						<input class="form-control" name="username" value="${dbData.username.replaceAll("\"","\\\"")}" required>
+						<label class="mb-2 mt-1" for="e">Email</label>
+						<input class="form-control" name="email" value="${dbData.email.replaceAll("\"","\\\"")}" required>
+						<label class="mb-2 mt-1" for="e">Country</label>
+						<input class="form-control" name="country" value="${dbData.country.replaceAll("\"","\\\"").toUpperCase()}" required>
+						<label class="mb-1 mt-1">Permissions</label><br>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="batSwitch">BAT</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="batSwitch" name="bat" value="true"${flags[Permissions.BAT] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="supporterSwitch">Supporter</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="supporterSwitch" name="supporter" value="true"${flags[Permissions.Supporter] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="peppySwitch">Peppy</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="peppySwitch" name="peppy" value="true"${flags[Permissions.Peppy] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="tournamentSwitch">Tournament</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="tournamentSwitch" name="tournament" value="true"${flags[Permissions.Tournament] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="botSwitch">Bot</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="botSwitch" name="bot" value="true"${flags[Permissions.Bot] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="moderatorSwitch">Moderator</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="moderatorSwitch" name="moderator" value="true"${flags[Permissions.Moderator] ? " checked" : ""}/>
+						</div>
+						<div class="form-check form-check-inline form-switch">
+							<label class="form-check-label" for="adminSwitch">Admin</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="adminSwitch" name="admin" value="true"${flags[Permissions.Admin] ? " checked" : ""}/>
+						</div>
+						<br>
+						<label class="mb-1 mt-1">Account Flags</label><br>
+						<div class="form-check form-switch">
+						<label class="form-check-label" for="verificationSwitch">Verification Required</label>
+							<input class="form-check-input" type="checkbox" role="switch" id="verificationSwitch" name="verification" value="true"${dbData.verification_needed ? " checked" : ""}/>
+						</div>
+						<input class="btn btn-success mt-3" type="submit" value="Save" />
+						<a class="btn btn-danger mt-3 ms-2" href="/?p=910">Cancel</a>
+					</form>
+
+					<script>
+						setTimeout(() => {
+							$("#pagealert").fadeOut("slow");
+						}, 5000);
+					</script>
+				`;
+			}
 
 		default:
 			return `
@@ -601,6 +619,10 @@ module.exports.page = async function(pid, req, res) {
 
 module.exports.nav = async function(pid, user = null) {
 	pid = pid == null ? 0 : parseInt(pid);
+
+	if (pid == 106 || pid == 107) {
+		return "";
+	}
 
 	let navbar = `
 <nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
@@ -621,11 +643,13 @@ module.exports.nav = async function(pid, user = null) {
 
 	navbar += `</div><div class="navbar-nav ml-auto">`;
 
+	navbar += `<a class="nav-link mode-switcher-container" href="#" onclick="switchModes()"><i class="bi bi-moon-fill mode-switcher-icon mode-switcher-dark"></i><i class="bi bi-brightness-high-fill mode-switcher-icon mode-switcher-light"></i></a>`;
+
 	if (user != null) {
 		// User button
 		navbar += `
 			<div class="nav-item dropdown">
-				<img class="nav-link dropdown-toggle p-0 pfp-border" style="max-height:2.75rem;border-radius:.5rem" id="profileDropdownButton" data-bs-toggle="dropdown" src="${config.profilepicture_url}${user.id}">
+				<img class="nav-link dropdown-toggle p-0 pfp-border" style="max-height:2.75rem;border-radius:.5rem;width:44px;height:44px" id="profileDropdownButton" data-bs-toggle="dropdown" src="${config.profilepicture_url}${user.id}?${user.web_pfp_cacheid}">
 				<div class="dropdown-menu mt-2 dropdown-menu-end bg-dark" aria-labelledby="profileDropdownButton">
 					<a class="dropdown-item text-light" href="/?p=50&u=${user.id}&m=0">My Profile</a>
 					<a class="dropdown-item text-light" href="/?p=105">Settings</a>${(user.id === 2) ? `<a class="dropdown-item text-light" href="/?p=900">Admin Panel</a>` : ""}
@@ -706,6 +730,9 @@ const monthTable = {
 }
 
 function calculatePageCount(numberOfItems = 0, itemsPerPage = 50) {
+	if (typeof(numberOfItems) === "bigint") {
+		numberOfItems = Number(numberOfItems);
+	}
 	const int = Math.floor(numberOfItems / itemsPerPage);
 	if (numberOfItems > int) {
 		return int + 1;

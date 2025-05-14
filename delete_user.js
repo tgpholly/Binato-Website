@@ -9,8 +9,6 @@ module.exports = async function(delete_info, req, res) {
 
 		const id = parseInt(delete_info.id);
 
-		console.log(id);
-
 		await global.Database.query("DELETE FROM users_info WHERE id = ?", [id]);
 		await global.Database.query("DELETE FROM users_modes_info WHERE user_id = ?", [id]);
 		await global.Database.query("DELETE FROM users_relationships WHERE user1 = ? OR user2 = ?", [id, id]);

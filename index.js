@@ -9,8 +9,10 @@ const app = require("express")(),
 	  change_password = require("./change_password.js"),
 	  profile_info = require("./profile_info.js"),
 	  delete_user = require("./delete_user.js"),
+	  save_user = require("./save_user"),
 	  DatabaseHelper = require("./DatabaseHelper.js"),
-	  crypto = require("crypto");
+	  crypto = require("crypto"),
+	  multer = require("multer");
 
 global.Database = new DatabaseHelper(config.database.address, config.database.port, config.database.username, config.database.password, config.database.name);
 
@@ -18,7 +20,9 @@ app.use(bodyParser.urlencoded({
 	extended: true
 }));
 
-app.get("*", async (req, res) => {
+let cachedSessions = [];
+
+app.get(/(.*)/, async (req, res) => {
 	const cleanUrl = req.url.split("?")[0];
 	if (cleanUrl == "/" || cleanUrl == "/index") {
 		const pageConstructStartTime = Date.now();
@@ -29,6 +33,8 @@ app.get("*", async (req, res) => {
 		if (req.cookie != null && req.cookieKeys.includes("binato_session")) {
 			req.user = await global.Database.query(`SELECT * FROM users_info WHERE web_session = ? LIMIT 1`, [req.cookie["binato_session"]]);
 		}
+
+		const darkMode = req.cookieKeys.includes("dark-mode") ? req.cookie["dark-mode"] === "true" : true;
 
 		let generatedContent;
 		try {
@@ -63,62 +69,35 @@ app.get("*", async (req, res) => {
 						<meta charset="utf-8">
 						<meta name="viewport" content="width=device-width, initial-scale=1">
 
-						<style>
-							body {
-								background-color: #181b1e!important;
-							}
-
-							h {
-								visibility: hidden;
-							}
-
-							.page-background {
-								background-color: #2b3035!important;
-								border-radius: .25rem;
-							}
-
-							.no-click {
-								pointer-events: none;
-							}
-
-							.bottom-border {
-								border-bottom: 1px solid #343a40;
-							}
-
-							.pfp-border {
-								transition: border-width ease-in .1s !important;
-								border: 0px solid white;
-							}
-							
-							.pfp-border:hover {
-								border-width: 2px;
-							}
-
-							.dropdown .show {
-								border-width: 2px;
-							}
-
-							/* Bootstrap Overrides */
-							.dropdown-item:focus, .dropdown-item:hover {
-								background-color: #434b53!important;
-							}
-						</style>
+						${req.user == null ? "" : `<link rel="preload" as="image" href="${config.profilepicture_url}${req.user.id}?${req.user.web_pfp_cacheid}">`}
 
 						<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" integrity="sha512-GQGU0fMMi238uA+a/bdWJfpUGKUkBdgfFdgBm72SUQ6BeyWjoY/ton0tEjH+OSH9iP4Dfh+7HM0I9f5eR0L/4w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+						<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.9.1/font/bootstrap-icons.min.css" integrity="sha512-5PV92qsds/16vyYIJo3T/As4m2d8b6oWYfoqV+vtizRB6KhF1F9kYzWzQmsO6T3z3QG2Xdhrx7FQ+5R1LiQdUA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+						<link rel="stylesheet" type="text/css" href="/custom.css">
 						<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 						<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js" integrity="sha512-pax4MlgXjHEPfCwcJLQhigY7+N8rt6bVvWLFyUMuxShv170X53TRzGPmPkZmGBhk+jikR8WBM4yl7A9WMHHqvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 					</head>
-					<body>
+					<body class="${darkMode ? "dark-mode" : "light-mode"}">
 						${await printer.nav(req.query.p, req.user)}
-						<div class="container text-light mt-3 p-4 page-background" style="max-width:1000px">
+						<div class="container mt-3 p-4 page-background" style="max-width:1000px">
 							${generatedContent}
 						</div>
 
 						<script>
-							function l() {
+							${`function l() {
 								document.cookie='binato_session=; Max-Age=-99999999;';
 								window.location.href = "/?p=0";
 							}
+
+							let darkModeState = "|||JSDARKMODESTATE|||";
+
+							function switchModes() {
+								document.cookie='dark-mode=; Max-Age=-99999999;';
+								document.body.classList.toggle("light-mode");
+								document.body.classList.toggle("dark-mode");
+								darkModeState = !darkModeState;
+								document.cookie="dark-mode=" + darkModeState;
+							}`.replace("\"|||JSDARKMODESTATE|||\"", darkMode)}
 						</script>
 					</body>
 				</html>
@@ -130,6 +109,9 @@ app.get("*", async (req, res) => {
 		switch (splitURL[1]) {
 			case "reset":
 				req.user = await global.Database.query(`SELECT * FROM users_info WHERE password_reset_key = ? AND password_reset_key IS NOT NULL LIMIT 1`, [splitURL[2]]);
+				if (req.user == undefined) {
+					return res.redirect(303, "/");
+				}
 				const sessionToken = crypto.randomBytes(32).toString("hex");
 				await global.Database.query("UPDATE users_info SET web_session = ?, password_change_required = ? WHERE username = ?", [sessionToken, 1, req.user.username]);
 				req.user.password_change_required = 1;
@@ -147,7 +129,35 @@ app.get("*", async (req, res) => {
 	}
 });
 
-app.post("*", async (req, res) => {
+if (!fs.existsSync(".pfpTemp")) {
+	fs.mkdirSync(".pfpTemp");
+}
+const pfpUpload = multer({
+	dest: ".pfpTemp"
+});
+
+app.post("/update_pfp", pfpUpload.single("pfp"), async (req, res) => {
+	if (req.file != undefined) {
+		req.cookie = cookieParser(req);
+		req.cookieKeys = Object.keys(req.cookie);
+
+		if (req.cookie != null && req.cookieKeys.includes("binato_session")) {
+			req.user = await global.Database.query(`SELECT * FROM users_info WHERE web_session = ? LIMIT 1`, [req.cookie["binato_session"]]);
+		}
+
+		if (req.user == null) {
+			return res.status(400).end("");
+		}
+
+		fs.rename(__dirname + "/" + req.file.path, `/home/holly/development/Binato-ProfilePicture/ProfilePictures/${req.user.id}.png`, async () => {
+			// Update cache id
+			await global.Database.query("UPDATE users_info SET web_pfp_cacheid = web_pfp_cacheid + 1 WHERE id = ?", [req.user.id]);
+			return res.status(200).end("");
+		});
+	}
+})
+
+app.post(/(.*)/, async (req, res) => {
 	req.url = req.url.split("?")[0];
 
 	req.cookie = cookieParser(req);
@@ -175,6 +185,12 @@ app.post("*", async (req, res) => {
 
 		case "/delete_user":
 			return res.redirect(303, await delete_user(req.body, req, res));
+
+		case "/save_user":
+			return res.redirect(303, await save_user(req.body, req, res));
+
+		case "/update_pfp":
+			
 	}
 });
 

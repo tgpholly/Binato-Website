@@ -1,5 +1,3 @@
-const fetch = require("node-fetch");
-
 const functionMap = {
 	"text": async (res) => await res.text(),
 	"json": async (res) => await res.json()

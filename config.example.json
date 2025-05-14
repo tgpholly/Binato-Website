@@ -3,14 +3,10 @@
 	"profilepicture_url": "http://example.com/",
 
 	"database": {
-		"address": "127.0.0.1",
-		"port": 3306,
-		"username": "username",
-		"password": "password",
-		"pbkdf2": {
-			"itterations": 1337,
-			"keylength": 1337
-		},
-		"name": "osu!"
+		"databaseAddress": "127.0.0.1",
+		"databasePort": 3306,
+		"databaseUsername": "username",
+		"databasePassword": "password",
+		"databaseName": "osu!"
 	}
 }

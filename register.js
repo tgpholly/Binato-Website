@@ -63,7 +63,7 @@ module.exports = function(loginInfo, req, res) {
 				}
 				passwordSalt = passwordSalt.toString("hex");
 
-				crypto.pbkdf2(md5(passwdInfo.ha), passwordSalt, config.database.pbkdf2.itterations, config.database.pbkdf2.keylength, "sha512", async (err, derivedKey) => {
+				crypto.pbkdf2(md5(loginInfo.ha), passwordSalt, config.database.pbkdf2.itterations, config.database.pbkdf2.keylength, "sha512", async (err, derivedKey) => {
 					if (err) {
 						console.error(err);
 						return resolve("/?p=101&e=5");
